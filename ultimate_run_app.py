@@ -55,50 +55,56 @@ with tab1:
     else:
         st.info("Henüz koşu yok.")
 
-# SEKME 2: STRAVA İŞLEMLERİ
+# TAB 2: STRAVA OTOMATİK ÇEKİM (YENİ FORM SİSTEMİ İLE)
 with tab2:
-    st.header("Strava Entegrasyonu")
+    st.header("Buluttan Veri İndir ☁️")
     
+    # 1. Adım: Yetki Verme Butonu
     if auth_url:
-        # 1. İzin Verme Butonu
-        st.markdown(f'<a href="{auth_url}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava\'ya İzin Ver</a>', unsafe_allow_html=True)
-        st.caption("👆 Butona bas, izin ver, sonra adres çubuğundaki 'code=...' kısmını kopyala.")
-        
-        st.divider()
-        
-        # 2. Kod Yapıştırma Alanı
-        code = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
-        
-        if code:
-            if st.button("Verileri İndir 📥"):
-                try:
-                    token_response = client.exchange_code_for_token(
-                        client_id=client_id, client_secret=client_secret, code=code
-                    )
-                    client.access_token = token_response['access_token']
-                    activities = client.get_activities(limit=5)
-                    
-                    st.success("Bağlandı! Son aktiviteler:")
-                    
-                    for act in activities:
-                        km = round(act.distance.num / 1000, 2)
-                        dk = int(act.moving_time.total_seconds() / 60)
-                        date = act.start_date_local.date()
-                        name = act.name
-                        
-                        with st.expander(f"🏃 {date} - {name} ({km} km)"):
-                            st.write(f"Süre: {dk} dk | Tempo: {act.average_speed}")
-                            if st.button("Bu Koşuyu Kaydet", key=act.id):
-                                pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}" if km>0 else "0:00"
-                                new_row = pd.DataFrame([{"Tarih": date, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": int(dk*12), "Hissiyat": "İyi", "Kaynak": "Strava"}])
-                                save_run(new_row)
-                                st.success("Eklendi!")
-                                
-                except Exception as e:
-                    st.error(f"Hata: {e}. Kodu yanlış kopyalamış olabilirsin.")
+        st.markdown(f'<a href="{auth_url}" target="_self" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava Hesabına İzin Ver</a>', unsafe_allow_html=True)
+        st.caption("👆 Tıkladıktan sonra gelen adresten 'code=...' kısmını kopyala.")
     else:
-        st.warning("⬅️ Önce sol menüden Client ID ve Secret girmen lazım.")
+        st.warning("⬅️ Önce sol menüden Client ID ve Secret gir.")
+    
+    st.divider()
 
+    # 2. Adım: Kodu Yapıştır ve Çek (FORM İÇİNDE KİLİT)
+    with st.form("strava_code_exchange"):
+        code_input = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
+        submitted = st.form_submit_button("Verileri Getir 📥")
+    
+        if submitted and code_input:
+            st.info("Veriler alınıyor, lütfen bekleyin...")
+            try:
+                # Token Al
+                client = Client() # Client'ı yeniden oluşturuyoruz
+                token_response = client.exchange_code_for_token(
+                    client_id=client_id, client_secret=client_secret, code=code_input
+                )
+                client.access_token = token_response['access_token']
+                
+                # Son 5 Aktiviteleri Çek
+                activities = client.get_activities(limit=5)
+                
+                st.success("Bağlantı Başarılı! İşte son aktivitelerin:")
+                
+                for act in activities:
+                    km = round(act.distance.num / 1000, 2)
+                    dk = int(act.moving_time.total_seconds() / 60)
+                    date = act.start_date_local.date()
+                    name = act.name
+                    
+                    with st.expander(f"🏃 {date} - {name} ({km} km)"):
+                        st.write(f"Süre: {dk} dk | Tempo: {act.average_speed}")
+                        
+                        if st.button(f"Bu Koşuyu Ekle ({name})", key=act.id):
+                            pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}" if km>0 else "0:00"
+                            new_row = pd.DataFrame([{"Tarih": date, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": int(dk*12), "Hissiyat": "İyi", "Kaynak": "Strava"}])
+                            get_data().save_run(new_row)
+                            st.success("Veritabanına eklendi!")
+                            
+            except Exception as e:
+                st.error(f"HATA: Bağlantı veya Kod Hatası. Tekrar izin alıp deneyin. Detay: {e}")
 # SEKME 3: MANUEL GİRİŞ
 with tab3:
     with st.form("manuel"):
