@@ -4,81 +4,108 @@ import datetime
 import os
 import plotly.express as px
 import gpxpy
-import time
+from stravalib.client import Client
 
 # --- AYARLAR ---
-st.set_page_config(page_title="RunMaster Titan", page_icon="🏃", layout="centered")
+st.set_page_config(page_title="RunMaster Auto", page_icon="⚡", layout="centered")
 
-# --- FONKSİYONLAR ---
+# --- VERİ FONKSİYONLARI ---
 def get_data():
-    # Streamlit Cloud'da veriler silinmesin diye hafızada (Cache) tutuyoruz
-    # Not: Gerçek kalıcılık için veritabanı gerekir ama bu başlangıç için yeterli.
     if 'df' not in st.session_state:
+        # Veri yoksa boş tablo oluştur
         st.session_state.df = pd.DataFrame(columns=["Tarih", "Mesafe (km)", "Süre (dk)", "Tempo", "Kalori", "Hissiyat", "Kaynak"])
     return st.session_state.df
 
 def save_run(new_row):
     st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
 
-def parse_gpx(file):
-    try:
-        gpx = gpxpy.parse(file)
-        moving_data = gpx.get_moving_data()
-        dist = moving_data.moving_distance / 1000
-        dur = moving_data.moving_time / 60
-        date = gpx.time.date() if gpx.time else datetime.date.today()
-        route = [{"lat": p.latitude, "lon": p.longitude} for t in gpx.tracks for s in t.segments for p in s.points]
-        return dist, dur, date, route
-    except:
-        return 0, 0, datetime.date.today(), []
-
-# --- TASARIM ---
-st.markdown("<h1 style='text-align: center; color: #FF4B4B;'>🏃 RunMaster TITAN</h1>", unsafe_allow_html=True)
+# --- SOL MENÜ (STRAVA GİRİŞİ BURADA!) ---
+with st.sidebar:
+    st.header("🔗 Strava Bağlantısı")
+    st.info("Strava API bilgilerini buraya gir:")
+    
+    # İşte aradığın kutucuklar bunlar:
+    client_id = st.text_input("Client ID (Sayı olan)")
+    client_secret = st.text_input("Client Secret (Uzun şifre)", type="password")
+    
+    auth_url = ""
+    if client_id and client_secret:
+        try:
+            client = Client()
+            auth_url = client.authorization_url(
+                client_id=client_id,
+                redirect_uri='https://share.streamlit.io',
+                scope=['read_all','activity:read_all']
+            )
+        except:
+            st.error("ID hatalı girildi.")
 
 # --- ANA EKRAN ---
-df = get_data()
-tab1, tab2, tab3 = st.tabs(["📊 Özet", "➕ Ekle", "🤖 Koç"])
+st.title("⚡ RunMaster: Strava Modu")
 
+tab1, tab2, tab3 = st.tabs(["📊 Özet", "☁️ Strava'dan Çek", "✍️ Manuel Ekle"])
+
+# SEKME 1: ÖZET
 with tab1:
+    df = get_data()
     if not df.empty:
         total_km = df["Mesafe (km)"].sum()
-        c1, c2 = st.columns(2)
-        c1.metric("Toplam Mesafe", f"{total_km:.1f} km")
-        c2.metric("Koşu Sayısı", len(df))
-        st.progress(min(total_km/50, 1.0))
-        st.caption("Aylık Hedef: 50km")
-        st.plotly_chart(px.bar(df, x="Tarih", y="Mesafe (km)", color="Hissiyat"), use_container_width=True)
+        st.metric("Toplam Mesafe", f"{total_km} km")
+        st.plotly_chart(px.bar(df, x="Tarih", y="Mesafe (km)", color="Kaynak"))
     else:
-        st.info("Henüz koşu kaydı yok. 'Ekle' sekmesine git!")
+        st.info("Henüz koşu yok.")
 
+# SEKME 2: STRAVA İŞLEMLERİ
 with tab2:
-    mode = st.radio("Giriş Türü", ["Manuel", "GPS Dosyası"], horizontal=True)
-    if mode == "Manuel":
-        with st.form("entry_form"):
-            d = st.date_input("Tarih")
-            km = st.number_input("Mesafe (km)", 0.0)
-            dk = st.number_input("Süre (dk)", 0)
-            feel = st.select_slider("Hissiyat", ["Kötü", "Normal", "İyi", "Süper"])
-            if st.form_submit_button("Kaydet"):
-                pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}" if km>0 else "0:00"
-                new_row = pd.DataFrame([{"Tarih": d, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": km*60, "Hissiyat": feel, "Kaynak": "Manuel"}])
-                save_run(new_row)
-                st.success("Kaydedildi!")
-                st.experimental_rerun()
+    st.header("Strava Entegrasyonu")
+    
+    if auth_url:
+        # 1. İzin Verme Butonu
+        st.markdown(f'<a href="{auth_url}" target="_blank" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava\'ya İzin Ver</a>', unsafe_allow_html=True)
+        st.caption("👆 Butona bas, izin ver, sonra adres çubuğundaki 'code=...' kısmını kopyala.")
+        
+        st.divider()
+        
+        # 2. Kod Yapıştırma Alanı
+        code = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
+        
+        if code:
+            if st.button("Verileri İndir 📥"):
+                try:
+                    token_response = client.exchange_code_for_token(
+                        client_id=client_id, client_secret=client_secret, code=code
+                    )
+                    client.access_token = token_response['access_token']
+                    activities = client.get_activities(limit=5)
+                    
+                    st.success("Bağlandı! Son aktiviteler:")
+                    
+                    for act in activities:
+                        km = round(act.distance.num / 1000, 2)
+                        dk = int(act.moving_time.total_seconds() / 60)
+                        date = act.start_date_local.date()
+                        name = act.name
+                        
+                        with st.expander(f"🏃 {date} - {name} ({km} km)"):
+                            st.write(f"Süre: {dk} dk | Tempo: {act.average_speed}")
+                            if st.button("Bu Koşuyu Kaydet", key=act.id):
+                                pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}" if km>0 else "0:00"
+                                new_row = pd.DataFrame([{"Tarih": date, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": int(dk*12), "Hissiyat": "İyi", "Kaynak": "Strava"}])
+                                save_run(new_row)
+                                st.success("Eklendi!")
+                                
+                except Exception as e:
+                    st.error(f"Hata: {e}. Kodu yanlış kopyalamış olabilirsin.")
     else:
-        up_file = st.file_uploader("GPX Yükle", type=['gpx'])
-        if up_file:
-            dist, dur, date, route = parse_gpx(up_file)
-            st.success(f"GPS Okundu: {dist:.2f} km")
-            if route: st.map(pd.DataFrame(route))
-            if st.button("Kaydet"):
-                pace = f"{int(dur/dist)}:{int(((dur/dist)%1)*60):02d}" if dist>0 else "0:00"
-                new_row = pd.DataFrame([{"Tarih": date, "Mesafe (km)": round(dist,2), "Süre (dk)": int(dur), "Tempo": pace, "Kalori": int(dur*10), "Hissiyat": "Normal", "Kaynak": "GPS"}])
-                save_run(new_row)
-                st.success("GPS Kaydedildi!")
-                st.experimental_rerun()
+        st.warning("⬅️ Önce sol menüden Client ID ve Secret girmen lazım.")
 
+# SEKME 3: MANUEL GİRİŞ
 with tab3:
-    goal = st.selectbox("Hedef Seç", ["5K Başlangıç", "10K Geliştirme", "Kilo Verme"])
-    if st.button("Plan Oluştur"):
-        st.success(f"Senin için {goal} planı hazırlandı! (Burada yapay zeka planı listelenir)")
+    with st.form("manuel"):
+        d = st.date_input("Tarih")
+        km = st.number_input("Mesafe", 0.0)
+        dk = st.number_input("Süre", 0)
+        if st.form_submit_button("Kaydet"):
+            new_row = pd.DataFrame([{"Tarih": d, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": "0:00", "Kalori": 0, "Hissiyat": "Normal", "Kaynak": "Manuel"}])
+            save_run(new_row)
+            st.success("Kaydedildi!")
