@@ -89,7 +89,7 @@ with tab2:
                 st.success("Bağlantı Başarılı! İşte son aktivitelerin:")
                 
                 for act in activities:
-                    km = round(act.distance.magnitude / 1000, 2)
+                    km = round(act.distance.magnitude/ 1000, 2)
                     dk = int(act.moving_time.total_seconds() / 60)
                     date = act.start_date_local.date()
                     name = act.name
