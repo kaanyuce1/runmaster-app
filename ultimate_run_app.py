@@ -59,16 +59,16 @@ with tab1:
 with tab2:
     st.header("Buluttan Veri İndir ☁️")
     
-    # 1. Adım: Yetki Verme Butonu
+    # Adım 1: Bağlan Butonu
     if auth_url:
-        st.markdown(f'<a href="{auth_url}" target="_self" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava Hesabına İzin Ver</a>', unsafe_allow_html=True)
-        st.caption("👆 Tıkladıktan sonra gelen adresten 'code=...' kısmını kopyala.")
+        st.markdown(f'<a href="{auth_url}" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava Hesabına İzin Ver</a>', unsafe_allow_html=True)
+        st.caption("👆 Butona tıkla, izin ver ve geri dönen adresteki 'code=...' kısmını kopyala.")
     else:
         st.warning("⬅️ Önce sol menüden Client ID ve Secret gir.")
     
     st.divider()
 
-    # 2. Adım: Kodu Yapıştır ve Çek (FORM İÇİNDE KİLİT)
+    # Adım 2: Kodu Yapıştır ve Çek (FORM İÇİNDE KİLİT)
     with st.form("strava_code_exchange"):
         code_input = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
         submitted = st.form_submit_button("Verileri Getir 📥")
@@ -77,7 +77,7 @@ with tab2:
             st.info("Veriler alınıyor, lütfen bekleyin...")
             try:
                 # Token Al
-                client = Client() # Client'ı yeniden oluşturuyoruz
+                client = Client()
                 token_response = client.exchange_code_for_token(
                     client_id=client_id, client_secret=client_secret, code=code_input
                 )
@@ -88,27 +88,46 @@ with tab2:
                 
                 st.success("Bağlantı Başarılı! İşte son aktivitelerin:")
                 
+                # --- HATA YAKALAYICI AKTİVİTE DÖNGÜSÜ (Kesin Çalışan Yapı) ---
                 for act in activities:
-                    # Yeni ve Sadeleştirilmiş Veri Çekimi:
-                    # Mesafe: Objenin kendisi metre cinsinden sayısal değeri döndürür.
-                    km = round(act.distance / 1000, 2)
-                    # Süre: Objenin saniye cinsinden değerini alıp dakikaya çeviriyoruz.
-                   dk = int(act.moving_time.total_seconds() / 60)
+                    
+                    # 1. MESAFE HESAPLAMA (km) - Tüm olası hataları yakalar
+                    try:
+                        km = round(act.distance.meters / 1000, 2)
+                    except AttributeError:
+                        try:
+                            km = round(act.distance.magnitude / 1000, 2)
+                        except AttributeError:
+                            km = round(act.distance / 1000, 2)
+
+                    # 2. SÜRE HESAPLAMA (dk) - Tüm olası hataları yakalar
+                    try:
+                        dk = int(act.moving_time.total_seconds() / 60)
+                    except AttributeError:
+                        try:
+                            dk = int(act.moving_time.seconds / 60)
+                        except AttributeError:
+                            # Son çare: Objenin kendisini sayısal saniye değeri olarak kabul et
+                            dk = int(act.moving_time / 60)
+                            
+                    # Diğer veriler
                     date = act.start_date_local.date()
                     name = act.name
                     
+                    # --- ARABİRİM KISMI ---
                     with st.expander(f"🏃 {date} - {name} ({km} km)"):
-                        st.write(f"Süre: {dk} dk | Tempo: {act.average_speed}")
-                        
-                        if st.button(f"Bu Koşuyu Ekle ({name})", key=act.id):
+                        c1, c2 = st.columns(2)
+                        c1.write(f"Süre: {dk} dk")
+                        c2.write(f"Tempo: {act.average_speed}")
+
+                        if st.button(f"Bu Koşuyu Veritabanına Ekle ({name})", key=act.id):
                             pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}" if km>0 else "0:00"
                             new_row = pd.DataFrame([{"Tarih": date, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": int(dk*12), "Hissiyat": "İyi", "Kaynak": "Strava"}])
-                            get_data().save_run(new_row)
+                            st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
                             st.success("Veritabanına eklendi!")
                             
             except Exception as e:
-                st.error(f"HATA: Bağlantı veya Kod Hatası. Tekrar izin alıp deneyin. Detay: {e}")
-# SEKME 3: MANUEL GİRİŞ
+                st.error(f"HATA: Bağlantı veya Kod Hatası. Tekrar izin alıp deneyin. Detay: {e}")# SEKME 3: MANUEL GİRİŞ
 with tab3:
     with st.form("manuel"):
         d = st.date_input("Tarih")
