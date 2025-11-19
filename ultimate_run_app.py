@@ -16,7 +16,10 @@ def get_data():
 
 # Data frame'e satır ekleme fonksiyonu
 def add_run(new_row):
-    st.session_state.df = pd.concat([st.session_session_state.df, new_row], ignore_index=True)
+    # Eğer bu fonksiyon çağrılırsa ve df yoksa, önce oluştururuz (savunmacı kodlama)
+    if 'df' not in st.session_state:
+        get_data()
+    st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
 
 # --- ANA EKRAN BAŞLANGICI ---
 st.title("⚡ RunMaster PRO: Tam Otomatik Strava Veri Analizi")
@@ -26,7 +29,8 @@ with st.sidebar:
     st.header("🔗 Strava Bağlantısı")
     st.info("API Bilgilerinizi Buraya Girin:")
     
-    client_id = st.text_input("Client ID", value="186085") # Örnek ID ile başlama
+    # Client ID ve Secret alma
+    client_id = st.text_input("Client ID", value="186085")
     client_secret = st.text_input("Client Secret", type="password")
     
     auth_url = ""
@@ -56,11 +60,10 @@ with tab1:
         col3.metric("Kayıt Sayısı", len(df))
         
         st.subheader("Koşu Dağılım Grafiği")
-        # Plotly kütüphanesini kullanırız
         try:
             st.plotly_chart(px.bar(df, x="Tarih", y="Mesafe (km)", color="Kaynak", title="Tarihe Göre Mesafe"))
-        except Exception as e:
-            st.warning("Grafik için yeterli veri yok.")
+        except Exception:
+            st.warning("Grafik oluşturulamadı.")
     else:
         st.info("Lütfen Strava'dan veri çekin veya manuel giriş yapın.")
 
@@ -71,7 +74,7 @@ with tab2:
     if auth_url:
         # Adım 1: İzin Verme Butonu
         st.markdown(f'<a href="{auth_url}" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava Hesabına İzin Ver</a>', unsafe_allow_html=True)
-        st.caption("👆 Butona tıkla, izin ver ve geri dönen adresteki 'code=...' kısmını kopyala.")
+        st.caption("👆 Butona tıkla, izin ver ve geri dönen adresteki 'code=...' kısmını kopyala. ")
     else:
         st.warning("⬅️ Önce sol menüden Client ID ve Secret gir.")
     
@@ -80,7 +83,7 @@ with tab2:
     # Adım 2: Kodu Yapıştır ve Çek (YAPISAL HATA ÇÖZÜMÜ: st.form_submit_button KULLANILDI)
     with st.form("strava_code_exchange"):
         code_input = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
-        submitted = st.form_submit_button("Verileri Getir 📥") # Hata veren st.button() yerine bu kullanılır.
+        submitted = st.form_submit_button("Verileri Getir 📥") # Form butonu kullanılarak yapısal hata çözüldü.
     
         if submitted and code_input:
             st.info("Veriler alınıyor, lütfen bekleyin...")
@@ -133,9 +136,28 @@ with tab2:
                             st.success("Veritabanına eklendi!")
                             
             except Exception as e:
-                st.error(f"HATA: Bağlantı veya Kod Hatası. Tekrar izin alıp deneyin. Detay: {e}")
+                # 400 Client Error durumunda kodun geçersiz olduğunu bildiririz.
+                if '400 Client Error: Bad Request' in str(e):
+                    st.error("HATA: İzin kodu geçersiz veya süresi dolmuş. Lütfen uygulamayı yenileyin ve YENİ bir kod alın.")
+                else:
+                    st.error(f"BEKLENMEDİK HATA: Bağlantı kurulamadı. Detay: {e}")
 
 # SEKME 3: MANUEL GİRİŞ
 with tab3:
-    st.write("Elle veri girişi (Eski yöntem).")
-    # ... (Manuel giriş formu buraya eklenebilir)
+    st.header("Elle Veri Girişi")
+    df = get_data()
+    with st.form("manuel_form"):
+        d = st.date_input("Tarih")
+        km = st.number_input("Mesafe (km)", 0.0)
+        dk = st.number_input("Süre (dakika)", 0)
+        submit_button = st.form_submit_button("Kaydet")
+        
+        if submit_button:
+            if km > 0 and dk > 0:
+                pace = f"{int(dk/km)}:{int(((dk/km)%1)*60):02d}"
+            else:
+                pace = "0:00"
+                
+            new_row = pd.DataFrame([{"Tarih": d, "Mesafe (km)": km, "Süre (dk)": dk, "Tempo": pace, "Kalori": 0, "Hissiyat": "Normal", "Kaynak": "Manuel"}])
+            add_run(new_row)
+            st.success("Koşu verisi manuel olarak kaydedildi!")
