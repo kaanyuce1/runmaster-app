@@ -93,7 +93,7 @@ with tab2:
                     # Mesafe: Objenin kendisi metre cinsinden sayısal değeri döndürür.
                     km = round(act.distance / 1000, 2)
                     # Süre: Objenin saniye cinsinden değerini alıp dakikaya çeviriyoruz.
-                    dk = int(act.moving_time.seconds / 60) # Sadece .seconds özelliğini kullanıyoruz
+                   dk = int(act.moving_time.total_seconds() / 60)
                     date = act.start_date_local.date()
                     name = act.name
                     
