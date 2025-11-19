@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from stravalib.client import Client
-import datetime # timedelta objeleri için gerekli
+import datetime
 
 # --- AYARLAR ---
 st.set_page_config(page_title="RunMaster Final", page_icon="⚡", layout="wide")
@@ -16,7 +16,7 @@ def get_data():
 
 # Data frame'e satır ekleme fonksiyonu
 def add_run(new_row):
-    st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
+    st.session_state.df = pd.concat([st.session_session_state.df, new_row], ignore_index=True)
 
 # --- ANA EKRAN BAŞLANGICI ---
 st.title("⚡ RunMaster PRO: Tam Otomatik Strava Veri Analizi")
@@ -33,9 +33,10 @@ with st.sidebar:
     if client_id and client_secret:
         try:
             client = Client()
+            # Yetki Verme Linki Oluşturma
             auth_url = client.authorization_url(
                 client_id=client_id,
-                redirect_uri='https://share.streamlit.io',
+                redirect_uri='https://share.streamlit.io', # Streamlit Cloud adresi
                 scope=['read_all','activity:read_all']
             )
         except:
@@ -55,7 +56,11 @@ with tab1:
         col3.metric("Kayıt Sayısı", len(df))
         
         st.subheader("Koşu Dağılım Grafiği")
-        st.plotly_chart(px.bar(df, x="Tarih", y="Mesafe (km)", color="Kaynak", title="Tarihe Göre Mesafe"))
+        # Plotly kütüphanesini kullanırız
+        try:
+            st.plotly_chart(px.bar(df, x="Tarih", y="Mesafe (km)", color="Kaynak", title="Tarihe Göre Mesafe"))
+        except Exception as e:
+            st.warning("Grafik için yeterli veri yok.")
     else:
         st.info("Lütfen Strava'dan veri çekin veya manuel giriş yapın.")
 
@@ -95,25 +100,23 @@ with tab2:
                 # --- HATA YAKALAYICI AKTİVİTE DÖNGÜSÜ ---
                 for act in activities:
                     
-                    # 1. MESAFE HESAPLAMA (km) - Defansif Programlama
-                    try: # Deneme 1: En modern attribute'leri dene
+                    # 1. MESAFE HESAPLAMA (km) - Tüm olası attribute hatalarını yakalar
+                    try: 
                         km = round(act.distance.meters / 1000, 2)
                     except AttributeError:
-                        try: # Deneme 2: Yaygın kullanılan büyüklük (magnitude) dene
+                        try:
                             km = round(act.distance.magnitude / 1000, 2)
                         except (AttributeError, TypeError):
-                            # Deneme 3: Objenin kendisini sayısal değer olarak kabul et (Son çare)
-                            km = round(act.distance / 1000, 2) 
+                            km = round(act.distance / 1000, 2) # En sade deneme
 
-                    # 2. SÜRE HESAPLAMA (dk) - Defansif Programlama
-                    try: # Deneme 1: Standart Python timedelta metodu
+                    # 2. SÜRE HESAPLAMA (dk) - Tüm olası attribute hatalarını yakalar
+                    try:
                         dk = int(act.moving_time.total_seconds() / 60)
                     except AttributeError:
-                        try: # Deneme 2: Objenin saniye özelliğini kullan
+                        try:
                             dk = int(act.moving_time.seconds / 60)
                         except (AttributeError, TypeError):
-                            # Deneme 3: Objenin kendisini saniye olarak kabul et
-                            dk = int(act.moving_time / 60)
+                            dk = int(act.moving_time / 60) # En sade deneme
                             
                     # Diğer veriler
                     date = act.start_date_local.date()
