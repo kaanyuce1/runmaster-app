@@ -89,8 +89,11 @@ with tab2:
                 st.success("Bağlantı Başarılı! İşte son aktivitelerin:")
                 
                 for act in activities:
+                    # Yeni ve Sadeleştirilmiş Veri Çekimi:
+                    # Mesafe: Objenin kendisi metre cinsinden sayısal değeri döndürür.
                     km = round(act.distance / 1000, 2)
-                    dk = int(act.moving_time.total_seconds() / 60)
+                    # Süre: Objenin saniye cinsinden değerini alıp dakikaya çeviriyoruz.
+                    dk = int(act.moving_time.seconds / 60) # Sadece .seconds özelliğini kullanıyoruz
                     date = act.start_date_local.date()
                     name = act.name
                     
