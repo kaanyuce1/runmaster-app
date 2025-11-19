@@ -16,7 +16,6 @@ def get_data():
 
 # Data frame'e satır ekleme fonksiyonu
 def add_run(new_row):
-    # Eğer bu fonksiyon çağrılırsa ve df yoksa, önce oluştururuz (savunmacı kodlama)
     if 'df' not in st.session_state:
         get_data()
     st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
@@ -29,8 +28,8 @@ with st.sidebar:
     st.header("🔗 Strava Bağlantısı")
     st.info("API Bilgilerinizi Buraya Girin:")
     
-    # Client ID ve Secret alma
-    client_id = st.text_input("Client ID", value="186085")
+    # Client ID ve Secret alma (Kullanıcının ID'si 186085)
+    client_id = st.text_input("Client ID", value="186085") 
     client_secret = st.text_input("Client Secret", type="password")
     
     auth_url = ""
@@ -40,7 +39,7 @@ with st.sidebar:
             # Yetki Verme Linki Oluşturma
             auth_url = client.authorization_url(
                 client_id=client_id,
-                redirect_uri='https://share.streamlit.io', # Streamlit Cloud adresi
+                redirect_uri='https://share.streamlit.io',
                 scope=['read_all','activity:read_all']
             )
         except:
@@ -74,16 +73,16 @@ with tab2:
     if auth_url:
         # Adım 1: İzin Verme Butonu
         st.markdown(f'<a href="{auth_url}" style="display: inline-block; padding: 12px 20px; background-color: #FC4C02; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚀 1. Adım: Strava Hesabına İzin Ver</a>', unsafe_allow_html=True)
-        st.caption("👆 Butona tıkla, izin ver ve geri dönen adresteki 'code=...' kısmını kopyala. ")
+        st.caption("👆 Butona tıkla, izin ver ve geri dönen adresteki 'code=...' kısmını kopyala.")
     else:
         st.warning("⬅️ Önce sol menüden Client ID ve Secret gir.")
     
     st.divider()
 
-    # Adım 2: Kodu Yapıştır ve Çek (YAPISAL HATA ÇÖZÜMÜ: st.form_submit_button KULLANILDI)
+    # Adım 2: Kodu Yapıştır ve Çek (YAPISAL HATA ÇÖZÜMÜ)
     with st.form("strava_code_exchange"):
         code_input = st.text_input("🚀 2. Adım: İzin Kodunu Buraya Yapıştır")
-        submitted = st.form_submit_button("Verileri Getir 📥") # Form butonu kullanılarak yapısal hata çözüldü.
+        submitted = st.form_submit_button("Verileri Getir 📥") # st.button hatası çözüldü.
     
         if submitted and code_input:
             st.info("Veriler alınıyor, lütfen bekleyin...")
@@ -110,7 +109,7 @@ with tab2:
                         try:
                             km = round(act.distance.magnitude / 1000, 2)
                         except (AttributeError, TypeError):
-                            km = round(act.distance / 1000, 2) # En sade deneme
+                            km = round(act.distance / 1000, 2)
 
                     # 2. SÜRE HESAPLAMA (dk) - Tüm olası attribute hatalarını yakalar
                     try:
@@ -119,7 +118,7 @@ with tab2:
                         try:
                             dk = int(act.moving_time.seconds / 60)
                         except (AttributeError, TypeError):
-                            dk = int(act.moving_time / 60) # En sade deneme
+                            dk = int(act.moving_time / 60)
                             
                     # Diğer veriler
                     date = act.start_date_local.date()
